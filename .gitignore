@@ -1,0 +1,20 @@
+# Rust build output
+/target
+**/*.rs.bk
+*.pdb
+ 
+# Editor settings
+.vscode/
+.idea/
+*.swp
+ 
+# OS junk
+.DS_Store
+Thumbs.db
+ 
+# Secrets / local config
+.env
+ 
+# Simulation output (uncomment if your program writes files you don't want in the repo)
+# *.csv
+# output/
