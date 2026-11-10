@@ -128,7 +128,9 @@ impl PovEngine {
     }
 
     pub fn observe_market_only(&mut self, bucket: &MarketBucket) {
-        self.cum_market += bucket.volume;
+        if self.remaining > 0.0 {
+            self.cum_market += bucket.volume;
+        }
     }
 
     pub fn finalize_result(&self, buckets: &[MarketBucket], arrival_price: f64 ) -> DayResult {   // DayResult is a struct defined in src/main.rs

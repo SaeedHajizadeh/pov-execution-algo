@@ -131,7 +131,13 @@ impl MarketSimulator {
     pub fn fill_price_with_impact(&self, bucket: &MarketBucket, qty: f64, is_buy: bool) -> f64 {
         let sign = if is_buy { 1.0 } else { -1.0 };
         let participation = qty / (qty + bucket.volume).max(1.0);          // should this not be (qty/()).max(1.0)????
-        let temp_impact = self.temporary_impact_coeff * participation.sqrt();
+        let temp_impact = self.temporary_impact_coeff * self.sigma_daily * participation.sqrt();
         bucket.vwap * (1.0 + sign * temp_impact)
+    }
+
+    /// Permanent price shift (fraction) after cum_qty shares executed
+    pub fn permanent_shift(&self, cum_qty: f64, is_buy: bool) -> f64 {
+        let sign = if is_buy { 1.0 } else { -1.0 };
+        sign * self.permanent_impact_coeff * self.sigma_daily * (cum_qty / self.adv).sqrt()
     }
 }

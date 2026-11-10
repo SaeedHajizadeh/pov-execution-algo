@@ -59,34 +59,65 @@ fn simulate_one_day(
     market_sim: &MarketSimulator,
     rng: &mut StdRng,
 ) -> DayResult {
-    let buckets = market_sim.generate_day(rng);
+    // let buckets = market_sim.generate_day(rng);
+    // let mut engine = PovEngine::new(cfg.clone());
+
+    // // EWMA forecast of next-bucket volume, seeded at the average bucket size
+    // let mut ewma_vol = market_sim.adv / market_sim.n_buckets as f64;
+    // let alpha = 0.30_f64;  // EWMA smoothing factor        \hat{V}_n = alpha * v_n + (1 - alpha) * \hat{V}_{n - 1}
+
+    // let arrival_price = buckets[0].mid_price;         // mid price of the first bucket of the day
+    // let mut n_child_orders = 0usize;                  // 0usize is the integer literal 0 explicitly typed as usize.
+
+    // for (i , bucket) in buckets.iter().enumerate(){
+    //     let buckets_remaining = buckets.len() - i;
+
+    //     let qty = engine.size_child_order(ewma_vol, buckets_remaining); // ewma_vol is the forecast of the bucket volume
+
+    //     if qty > 0.0 {
+    //         n_child_orders += 1;
+    //         let fill_price = market_sim.fill_price_with_impact(bucket , qty , cfg.is_buy);
+    //         engine.record_fill(bucket , qty , fill_price);
+    //     }
+    //     else {
+    //         // still need to account for market volume passing by even if we do not trade
+    //         engine.observe_market_only(bucket);
+    //     }
+    //     ewma_vol = alpha * bucket.volume + (1.0 - alpha) * ewma_vol;       // Core EWMA formula
+    // }
+
+    // engine.finalize_result(&buckets , arrival_price)
+
+
+    let mut buckets = market_sim.generate_day(rng);
     let mut engine = PovEngine::new(cfg.clone());
 
-    // EWMA forecast of next-bucket volume, seeded at the average bucket size
     let mut ewma_vol = market_sim.adv / market_sim.n_buckets as f64;
-    let alpha = 0.30_f64;  // EWMA smoothing factor        \hat{V}_n = alpha * v_n + (1 - alpha) * \hat{V}_{n - 1}
+    let alpha = 0.30_f64;
 
-    let arrival_price = buckets[0].mid_price;         // mid price of the first bucket of the day
-    let mut n_child_orders = 0usize;                  // 0usize is the integer literal 0 explicitly typed as usize.
+    let arrival_price = buckets[0].mid_price;
+    let mut cum_qty = 0.0;                                       // NEW
 
-    for (i , bucket) in buckets.iter().enumerate(){
+    for i in 0..buckets.len() {                                  // CHANGED: index loop
+        let shift = market_sim.permanent_shift(cum_qty, cfg.is_buy);  // NEW
+        buckets[i].vwap *= 1.0 + shift;                          // NEW
+        buckets[i].mid_price *= 1.0 + shift;                     // NEW
+        let bucket = buckets[i];                                 // NEW: a copy, not a reference
         let buckets_remaining = buckets.len() - i;
 
-        let qty = engine.size_child_order(ewma_vol, buckets_remaining); // ewma_vol is the forecast of the bucket volume
+        let qty = engine.size_child_order(ewma_vol, buckets_remaining);
 
         if qty > 0.0 {
-            n_child_orders += 1;
-            let fill_price = market_sim.fill_price_with_impact(bucket , qty , cfg.is_buy);
-            engine.record_fill(bucket , qty , fill_price);
+            let fill_price = market_sim.fill_price_with_impact(&bucket, qty, cfg.is_buy);  // &bucket now
+            engine.record_fill(&bucket, qty, fill_price);
+            cum_qty += qty;                                      // NEW
+        } else {
+            engine.observe_market_only(&bucket);
         }
-        else {
-            // still need to account for market volume passing by even if we do not trade
-            ewma_vol = alpha * bucket.volume + (1.0 - alpha) * ewma_vol;       // Core EWMA formula
-    
-        }
+        ewma_vol = alpha * bucket.volume + (1.0 - alpha) * ewma_vol;
     }
 
-    engine.finalize_result(&buckets , arrival_price)
+    engine.finalize_result(&buckets, arrival_price)
 }
 
 
@@ -103,7 +134,7 @@ fn main() {
     let cfg = PovConfig {
         parent_quantity: 500_000.0,     // shares to buy
         target_rate: 0.10,              // target 10% of total volume
-        min_rate: 0.03,                 // never go below 3% if trading 
+        min_rate: 0.1,                 // never go below 3% if trading 
         max_rate: 0.25,                 // hard risk cap at 25%                                                own / (own + market) <= max_rate
         min_clip: 100.0,                // smallest child order (odd lot size)
         max_clip_frac_of_bucket: 0.5,   // Liquidity cap: Never try to be more than 50% of a single bucket     own / market <= max_clip
@@ -117,10 +148,12 @@ fn main() {
         n_buckets: 78,                 // We have 78 5-minute buckets in a trading day
         sigma_daily: 0.02,             // 2% daily volatility
         s0: 100.0,                     // starting price
-        permanent_impact_coeff: 0.05,  // eta: permanent impact coefficient
+        permanent_impact_coeff: 0.5,  // eta: permanent impact coefficient
         temporary_impact_coeff: 0.10,  // epsilon: temporary impact coefficient
         volume_noise_cv: 0.35,         // coefficient of variation of bucket volume
     };
+
+
 
     let n_sims = 2_000;
     let results = run_monte_carlo(n_sims , cfg.clone(), market_sim, 42);
