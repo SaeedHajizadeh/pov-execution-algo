@@ -34,6 +34,7 @@
 mod market;
 mod pov;
 mod stats;
+mod plot;
 
 use market::MarketSimulator;
 use pov::{PovConfig, PovEngine};
@@ -131,9 +132,9 @@ fn run_monte_carlo(n_sims: usize, cfg: PovConfig, market_sim: MarketSimulator, s
 
 fn main() {
     // -------------------------- Parent order & algo configuration ------------------------------
-    let cfg = PovConfig {
+    let base_cfg = PovConfig {
         parent_quantity: 500_000.0,     // shares to buy
-        target_rate: 0.10,              // target 10% of total volume
+        target_rate: 0.2,              // target 10% of total volume
         min_rate: 0.1,                 // never go below 3% if trading 
         max_rate: 0.25,                 // hard risk cap at 25%                                                own / (own + market) <= max_rate
         min_clip: 100.0,                // smallest child order (odd lot size)
@@ -156,7 +157,56 @@ fn main() {
 
 
     let n_sims = 2_000;
-    let results = run_monte_carlo(n_sims , cfg.clone(), market_sim, 42);
-
-    stats::report(&results , &cfg);
+    
+    
+    let mut pts: Vec<(f64,f64,f64)> = Vec::new();
+    for pct in 1..=50 {
+    let rho = pct as f64 / 100.0;
+    let cfg = PovConfig {
+        target_rate: rho,
+        min_rate: 0.3 * rho,              // keep the bands proportional to the target
+        max_rate: (2.5 * rho).min(0.9),
+        max_clip_frac_of_bucket: 2.0,     // so the liquidity cap doesn't bind at high rates
+        ..base_cfg.clone()                // all other fields copied from base_cfg
+    };
+    let results = run_monte_carlo(n_sims, cfg, market_sim.clone(), 42);  // same seed for every rate
+    let is: Vec<f64> = results.iter().map(|r| r.implementation_shortfall_bps).collect();
+    let mean = stats::mean(&is);
+    let se = stats::std_dev(&is) / (is.len() as f64).sqrt();
+    println!("{:>3}%  IS {:7.2} ± {:5.2} bps", pct, mean, 1.96 * se);
+    pts.push((pct as f64, mean, se));
 }
+    plot::plot_is_vs_rate("is_vs_rate.png", &pts).unwrap();
+    
+    
+    
+    
+    
+    
+    // let results = run_monte_carlo(n_sims , cfg.clone(), market_sim, 42);
+
+    // stats::report(&results , &cfg);
+}
+
+
+
+
+/*
+
+    Hyperparameters: 
+        min_rate
+        max_rate
+        urgency_catchup
+        min_clip
+        max_clip_frac_of_bucket
+        alpha   --> EWMA
+
+    
+    Market model parameters (calibrated from historical data):
+        adv
+        sigma_daily
+        impact coefficients
+        volume_noise_cv
+
+*/
+

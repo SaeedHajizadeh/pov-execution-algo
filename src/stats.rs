@@ -3,11 +3,11 @@
 use crate::pov::PovConfig;
 use crate::DayResult;
 
-fn mean(xs: &[f64]) -> f64 {
+pub fn mean(xs: &[f64]) -> f64 {
     xs.iter().sum::<f64>() / xs.len().max(1) as f64
 }
 
-fn std_dev(xs: &[f64]) -> f64 {
+pub fn std_dev(xs: &[f64]) -> f64 {
     let m = mean(xs);
     let var = xs.iter().map(|x| (x - m).powi(2)).sum::<f64>() / (xs.len().max(2) - 1) as f64;
     var.sqrt()
