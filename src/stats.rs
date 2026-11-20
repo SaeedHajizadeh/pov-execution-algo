@@ -65,6 +65,6 @@ mod tests {
         let xs = vec![1.0 , 2.0 , 3.0 , 4.0 , 5.0];
         assert!((mean(&xs) - 3.0).abs() < 1e-9);
         assert!(std_dev(&xs) > 0.0);
-        assert!((precentile(&xs, 50.0) - 3.0).abs() < 1e-9);
+        assert!((percentile(&xs, 50.0) - 3.0).abs() < 1e-9);
     }
 }
